@@ -1,58 +1,65 @@
-import os,win32api,sys
+import os
+import win32api
+import sys
 from pathlib import Path
 import configparser
-import win32com 
+import win32com
 import win32com.client
 import tkinter as tk
-from tkinter import ttk,messagebox
+from tkinter import ttk, messagebox
 import json
 import winreg
 # .venv\Scripts\Activate.ps1
 # pyinstaller -F -w iefav.py -i iexplore_00001.ico
 
+
 def is_admin():
     # 由于win32api中没有IsUserAnAdmin函数,所以用了这种方法
     try:
         # 在c:\windows目录下新建一个文件test01.txt
-        testfile=os.path.join(os.getenv("windir"),"test01.txt")
-        open(testfile,"w").close()
-    except OSError: # 不成功
+        testfile = os.path.join(os.getenv("windir"), "test01.txt")
+        open(testfile, "w").close()
+    except OSError:  # 不成功
         return False
-    else: # 成功
-        os.remove(testfile) # 删除文件
+    else:  # 成功
+        os.remove(testfile)  # 删除文件
         return True
 
-def open_url(url,browser):
-    if browser=='ie':
+
+def open_url(url, browser):
+    if browser == 'ie':
         try:
-            if 1==1:
+            if 1 == 1:
                 ie = win32com.client.DispatchEx('InternetExplorer.Application')
                 ie.Visible = 1
-                ie.Navigate(url) 
+                ie.Navigate(url)
                 ie.Delete()
-                ie.Quit() 
+                ie.Quit()
                 ie.close()
             else:
-                os.system('start \"C:\\Program Files (x86)\\Internet Explorer\\Internet Explorer\\iexplore.exe\" '+url+' -Embedding')
+                os.system(
+                    'start \"C:\\Program Files (x86)\\Internet Explorer\\Internet Explorer\\iexplore.exe\" '+url+' -Embedding')
         except:
             pass
     else:
         os.system('start '+url)
         pass
 # 确保收藏夹路径存在
-def list_files(favorites_path,depth):
+
+
+def list_files(favorites_path, depth):
     # print(favorites_path.name+f'(层级{depth})包含:')
     global url_list
-    inner_dirs=[]
+    inner_dirs = []
     if favorites_path.exists() and favorites_path.is_dir():
         # 列举收藏夹中的文件
         for filename in favorites_path.iterdir():
             if filename.is_dir():
-                
-                if depth==0:
-                    temp_favorites_path='Favorites'
+
+                if depth == 0:
+                    temp_favorites_path = 'Favorites'
                 else:
-                    temp_favorites_path=favorites_path.name
+                    temp_favorites_path = favorites_path.name
                 if temp_favorites_path in url_list:
                     # url_list[temp_favorites_path].update({file_name_main:{}})
                     pass
@@ -62,64 +69,168 @@ def list_files(favorites_path,depth):
                 inner_dirs.append(filename)
                 pass
             else:
-                file_name=filename.name
-                file_name_main=''.join(file_name.split('.')[0:-1]).lower()
-                file_name_ext=(file_name.split('.')[-1]).lower()
-                if file_name_ext=='url':
+                file_name = filename.name
+                file_name_main = ''.join(file_name.split('.')[0:-1]).lower()
+                file_name_ext = (file_name.split('.')[-1]).lower()
+                if file_name_ext == 'url':
                     try:
                         config = configparser.ConfigParser()  # 类实例化
                         # 定义文件路径
                         configpath = filename
                         config.read(configpath)
                         url = config['InternetShortcut']['URL']
-                        if depth==0:
-                            temp_favorites_path='Favorites'
+                        if depth == 0:
+                            temp_favorites_path = 'Favorites'
                         else:
-                            temp_favorites_path=favorites_path.name
+                            temp_favorites_path = favorites_path.name
                         if temp_favorites_path in url_list:
-                            url_list[temp_favorites_path].update({file_name_main:url})
+                            url_list[temp_favorites_path].update(
+                                {file_name_main: url})
                         else:
-                            url_list.update({temp_favorites_path:{file_name_main:url}})
+                            url_list.update(
+                                {temp_favorites_path: {file_name_main: url}})
 
                         # print(file_name_main+':'+url)
-                        
+
                     except Exception as e:
                         # print(e)
                         pass
         for inner_dir in inner_dirs:
-            list_files(inner_dir,depth+1)
+            list_files(inner_dir, depth+1)
     else:
         # print(f"Favorites folder does not exist at: {favorites_path.name}")
         pass
+
+
+def check_fav_list(favorites_path, depth):
+    global temp_text
+    import requests
+    inner_dirs = []
+    if favorites_path.exists() and favorites_path.is_dir():
+        # 列举收藏夹中的文件
+        for filename in favorites_path.iterdir():
+            if filename.is_dir():
+                inner_dirs.append(filename)
+                pass
+            else:
+                file_name = filename.name
+                file_name_main = ''.join(file_name.split('.')[0:-1]).lower()
+                file_name_ext = (file_name.split('.')[-1]).lower()
+                if file_name_ext == 'url':
+                    try:
+                        config = configparser.ConfigParser()  # 类实例化
+                        # 定义文件路径
+                        configpath = filename
+                        config.read(configpath)
+                        url = config['InternetShortcut']['URL']
+                        try:
+                            # 访问
+                            r = requests.get(url, timeout=500)
+                        # 如果可则添加
+                            if r.status_code == requests.codes.ok:
+                                # print("ok------ 保留：" + file_name_main)
+                                temp_text.append(
+                                    "ok------ 保留：" + file_name_main)
+                                pass
+                            else:
+                                if (r.status_code == 404):
+                                    os.remove(filename)
+                                    # print("不可访问 删除：" + file_name_main)
+                                    temp_text.append(
+                                        "不可访问 删除：" + file_name_main + '错误码 '+str(r.status_code))
+                                else:
+                                    # print("其他原因 保留：" + file_name_main)
+                                    temp_text.append(
+                                        "其他原因 保留：" + file_name_main + '错误码 '+str(r.status_code))
+                        except:
+                            os.remove(filename)
+                            # print("访问超时 删除：" + file_name_main)
+                            temp_text.append("访问超时 删除：" + file_name_main)
+                    except Exception as e:
+                        os.remove(filename)
+                        temp_text.append(
+                            "链接损坏 删除：" + file_name_main + '错误码 '+str(e))
+                        # print(e)
+                        pass
+        for inner_dir in inner_dirs:
+            check_fav_list(inner_dir, depth+1)
+    else:
+        # print(f"Favorites folder does not exist at: {favorites_path.name}")
+        pass
+
+
 def slct(evt):
     for item in tree.selection():
         # print(tree.item(item, "values")[0])
         try:
-            open_url(tree.item(item, "values")[0],'ie')
+            open_url(tree.item(item, "values")[0], 'ie')
         except:
             pass
 
 
-def open_(evt):  # 
+def open_(evt):  #
     for item in tree.selection():
         print(f"{item} has opened")
+
+
 def close(evt):
     for item in tree.selection():
         print(f"{item} has closed")
+
+
 def show_about():
     result = messagebox.showinfo(
         title='关于IE收藏夹', message='已开发Windows11系统收藏夹IE浏览器打开工具。\n用于在Windows11系统中调用IE浏览器打开系统收藏夹内的网址。\n Author：CrazYan 2024')
+
+
 def show_help():
-    popup('帮助','如果点击链接没有反应，可能是后台IE挂起，\n请从“操作”菜单执行“重置IE”指令')
-def popup(title,message):
+    popup('帮助', '如果点击链接没有反应，可能是后台IE挂起，\n请从“操作”菜单执行“重置IE”指令')
+
+
+def popup(title, message):
     messagebox.showinfo(title, message)
+
+
 def reset_ie():
     import subprocess
 
     command = 'taskkill -im iexplore.exe /F'
     subprocess.call(command, creationflags=subprocess.CREATE_NO_WINDOW)
-    #os.system("start /B taskkill -im iexplore.exe /F")
+    # os.system("start /B taskkill -im iexplore.exe /F")
+
+
+def clean_favorite():
+    global temp_text
+    temp_text = []
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, 'Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders') as key:
+        favorites_path, _ = winreg.QueryValueEx(key, "Favorites")
+    favorites_path = Path(favorites_path)
+    print('开始检查收藏夹')
+    check_fav_list(favorites_path, 0)
+    print('检查完成')
+    dialog = tk.Toplevel(win)
+    dialog.title("收藏夹清理结果")
+
+    # 在弹窗中添加一个文本框Entry控件
+    entry = tk.Text(dialog)
+    entry.pack(side=tk.LEFT,expand=True, fill=tk.BOTH)
+    scroll = tk.Scrollbar(dialog)
+
+    scroll.config(command=entry.yview)
+    scroll.pack(side=tk.RIGHT, fill=tk.Y)
+    entry.config(yscrollcommand=scroll.set)
+    entry.insert(tk.END, '链接总数：'+str(len(temp_text))+'\n')
+    entry.update()
+    entry.see(tk.END)
+    for line in temp_text:
+        entry.insert(tk.END, line+'\n')
+        entry.update()
+        entry.see(tk.END)
+    pass
+
+
 if __name__ == '__main__':
+    temp_text = []
     if is_admin():
         # 获取当前用户的用户名
         user_name = os.getlogin()
@@ -127,14 +238,14 @@ if __name__ == '__main__':
         favorites_path = Path(os.path.expanduser('~')) / 'Favorites'
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, 'Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders') as key:
             favorites_path, _ = winreg.QueryValueEx(key, "Favorites")
-        favorites_path=Path(favorites_path)    
-        url_list={}
-        url_json=json.dumps(url_list)
-        url_list=json.loads(url_json) 
-        list_files(favorites_path,0)
+        favorites_path = Path(favorites_path)
+        url_list = {}
+        url_json = json.dumps(url_list)
+        url_list = json.loads(url_json)
+        list_files(favorites_path, 0)
         # print(url_list)
-        
-        win=tk.Tk()
+
+        win = tk.Tk()
         win.title("IE收藏夹")
         # 获取窗口大小
         sw = win.winfo_screenwidth()
@@ -145,11 +256,13 @@ if __name__ == '__main__':
         cen_x = (sw - Width) / 2
         cen_y = (sh - Hight) / 2
         # 设置窗口大小并居中
-        win.geometry('%dx%d+%d+%d' % (Width, Hight, cen_x, cen_y)) 
+        win.geometry('%dx%d+%d+%d' % (Width, Hight, cen_x, cen_y))
         menubar = tk.Menu(win)
-        filemenu =tk.Menu(menubar, tearoff=0)
+        filemenu = tk.Menu(menubar, tearoff=0)
         filemenu.add_command(
             label='重置IE', accelerator='Ctrl+R', command=reset_ie)
+        filemenu.add_command(
+            label='清理收藏夹', accelerator='Ctrl+Z', command=clean_favorite)
         menubar.add_cascade(label='操作', menu=filemenu)
         aboutmenu = tk.Menu(menubar, tearoff=0)
         aboutmenu.add_command(
@@ -159,16 +272,16 @@ if __name__ == '__main__':
         menubar.add_cascade(label='关于', menu=aboutmenu)
         win.config(menu=menubar)
         # 此为根节点
-        tree = ttk.Treeview(win, show = "tree")
+        tree = ttk.Treeview(win, show="tree")
         for key in url_list:
             father = tree.insert("", 1, key, text=key)
             for v in url_list[key]:
                 try:
-                    tree.insert(father, 1, v, 
-                        text=v, values=url_list[key][v])
+                    tree.insert(father, 1, v,
+                                text=v, values=url_list[key][v])
                 except:
                     pass
-        tree.pack(side=tk.LEFT, expand = True, fill = tk.BOTH)
+        tree.pack(side=tk.LEFT, expand=True, fill=tk.BOTH)
         tree.bind('<<TreeviewSelect>>', slct)
         tree.bind('<<TreeviewOpen>>', open_)
         tree.bind('<<TreeviewClose>>', close)
@@ -180,4 +293,5 @@ if __name__ == '__main__':
         win.mainloop()
     else:
         # 以管理员权限重新运行程序
-        win32api.ShellExecute(None,"runas", sys.executable, __file__, None, 1)
+        win32api.ShellExecute(None, "runas", sys.executable, __file__, None, 1)
+        pass
